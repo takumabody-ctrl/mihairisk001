@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>未配リスク計算機 | SIMPLE & SMART</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0a0c10; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; transition: 0.3s; }
+        .alert { border: 2px solid #f85149; box-shadow: 0 0 15px rgba(248, 81, 73, 0.2); }
+        .input-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px; text-align: center; color: white; width: 100%; font-weight: bold; }
+        .label-text { font-size: 10px; color: #8b949e; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+    </style>
+</head>
+<body class="p-4">
+
+    <header class="max-w-4xl mx-auto mb-6 flex justify-between items-end">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight">FLEET MONITOR</h1>
+            <p class="text-[10px] text-gray-500 uppercase tracking-widest">Risk Calculation Engine</p>
+        </div>
+        <div id="clock" class="text-2xl font-mono font-bold text-blue-400">00:00</div>
+    </header>
+
+    <div id="grid" class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+    <script>
+        const STORAGE_KEY = 'simple_delivery_tracker';
+        const DRIVER_COUNT = 5; // ドライバー数を変更する場合はここを調整
+
+        let drivers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || Array.from({ length: DRIVER_COUNT }, (_, i) => ({
+            name: `Driver ${i + 1}`, total: 100, done: 0, absent: 0, start: "08:00", end: "20:00"
+        }));
+
+        function calculate(d) {
+            const now = new Date();
+            const parse = (t) => {
+                const [h, m] = t.split(':').map(Number);
+                const dt = new Date(); dt.setHours(h, m, 0, 0); return dt;
+            };
+            
+            const start = parse(d.start);
+            const end = parse(d.end);
+            const elapsed = Math.max(1, (now - start) / (1000 * 60 * 60)); // 経過時間(h)
+            const remaining = Math.max(0.1, (end - now) / (1000 * 60 * 60)); // 残り時間(h)
+            
+            const currentPace = d.done / elapsed; // 時速
+            const leftItems = Math.max(0, d.total - d.done - d.absent); // 残り個数
+            const reqPace = leftItems / remaining; // 必要な時速
+            
+            const risk = d.done > 0 ? Math.min(150, Math.floor((reqPace / currentPace) * 100)) : 0;
+            const predict = Math.max(0, Math.ceil(leftItems - (currentPace * remaining)));
+
+            return { risk, predict, pace: currentPace.toFixed(1) };
+        }
+
+        function render() {
+            const container = document.getElementById('grid');
+            container.innerHTML = '';
+            
+            drivers.forEach((d, i) => {
+                const stats = calculate(d);
+                const isAlert = stats.risk >= 100 && stats.predict > 0;
+                
+                const div = document.createElement('div');
+                div.className = `card ${isAlert ? 'alert' : ''}`;
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-4">
+                        <input class="bg-transparent font-bold outline-none border-b border-gray-700 w-1/2" value="${d.name}" oninput="drivers[${i}].name=this.value;save()">
+                        <div class="text-right">
+                            <span class="label-text">Risk</span>
+                            <div class="text-2xl font-black ${isAlert ? 'text-red-500' : 'text-green-400'}">${stats.risk}%</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+                        <div class="bg-black/30 p-2 rounded">
+                            <div class="label-text">Pace</div>
+                            <div class="font-bold text-blue-300">${stats.pace}/h</div>
+                        </div>
+                        <div class="bg-black/30 p-2 rounded col-span-2">
+                            <div class="label-text">未配予測</div>
+                            <div class="font-bold ${stats.predict > 0 ? 'text-red-400' : 'text-green-400'}">${stats.predict > 0 ? 'あと '+stats.predict+' 個' : '完配見込'}</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="label-text text-blue-400">完了数</div>
+                            <input type="number" class="input-box border-blue-900" value="${d.done}" oninput="drivers[${i}].done=Number(this.value);save();updateUI()">
+                        </div>
+                        <div>
+                            <div class="label-text text-orange-400">不在数</div>
+                            <input type="number" class="input-box border-orange-900" value="${d.absent}" oninput="drivers[${i}].absent=Number(this.value);save();updateUI()">
+                        </div>
+                        <div>
+                            <div class="label-text text-gray-500">持戻込総数</div>
+                            <input type="number" class="input-box" value="${d.total}" oninput="drivers[${i}].total=Number(this.value);save();updateUI()">
+                        </div>
+                        <div class="grid grid-cols-2 gap-1">
+                            <div>
+                                <div class="label-text">開始</div>
+                                <input type="text" class="input-box text-[10px] p-1" value="${d.start}" oninput="drivers[${i}].start=this.value;save();updateUI()">
+                            </div>
+                            <div>
+                                <div class="label-text">終了</div>
+                                <input type="text" class="input-box text-[10px] p-1" value="${d.end}" oninput="drivers[${i}].end=this.value;save();updateUI()">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(drivers)); }
+        function updateUI() { render(); }
+        
+        // 時計と自動更新
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            render();
+        }, 1000 * 30);
+
+        // 初回実行
+        document.getElementById('clock').innerText = new Date().getHours().toString().padStart(2, '0') + ':' + new Date().getMinutes().toString().padStart(2, '0');
+        render();
+    </script>
+</body>
+</html>
