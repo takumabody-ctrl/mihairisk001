@@ -3,109 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>未配リスク計算機 | SIMPLE & SMART</title>
+    <title>未配リスク計算機 | Smart Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0a0c10; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px; transition: 0.3s; }
-        .alert { border: 2px solid #f85149; box-shadow: 0 0 15px rgba(248, 81, 73, 0.2); }
-        .input-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px; text-align: center; color: white; width: 100%; font-weight: bold; }
+        body { background-color: #0a0c10; color: #e6edf3; font-family: sans-serif; -webkit-font-smoothing: antialiased; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 16px; }
+        .alert { border: 2px solid #f85149; background: #211515; }
+        .input-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px; text-align: center; color: white; width: 100%; font-weight: bold; font-size: 16px; }
         .label-text { font-size: 10px; color: #8b949e; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+        input[type=range] { width: 100%; accent-color: #58a6ff; cursor: pointer; height: 30px; }
     </style>
 </head>
-<body class="p-4">
+<body class="p-4 pb-20">
 
-    <header class="max-w-4xl mx-auto mb-6 flex justify-between items-end">
-        <div>
-            <h1 class="text-xl font-bold tracking-tight">FLEET MONITOR</h1>
-            <p class="text-[10px] text-gray-500 uppercase tracking-widest">Risk Calculation Engine</p>
+    <header class="max-w-4xl mx-auto mb-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h1 class="text-xl font-black tracking-tighter">FLEET MONITOR</h1>
+                <div id="mode-badge" class="text-[9px] font-bold px-2 py-0.5 rounded bg-green-900 text-green-300 inline-block uppercase">Real-time</div>
+            </div>
+            <div class="text-right">
+                <div id="display-time" class="text-3xl font-mono font-black text-blue-400 leading-none">00:00</div>
+                <button onclick="resetToNow()" class="mt-2 text-[10px] font-bold bg-blue-600 text-white px-3 py-1 rounded-full active:scale-95 transition-all">↺ 現在時刻に同期</button>
+            </div>
         </div>
-        <div id="clock" class="text-2xl font-mono font-bold text-blue-400">00:00</div>
+        <div class="bg-[#161b22] p-3 rounded-xl border border-gray-800">
+            <div class="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                <span>06:00</span>
+                <span>時刻コントロール (シミュレーション)</span>
+                <span>22:00</span>
+            </div>
+            <input type="range" id="time-slider" min="360" max="1320" step="1">
+        </div>
     </header>
 
     <div id="grid" class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4"></div>
 
     <script>
-        const STORAGE_KEY = 'simple_delivery_tracker';
-        const DRIVER_COUNT = 5; // ドライバー数を変更する場合はここを調整
+        const STORAGE_KEY = 'smart_delivery_v10';
+        let isSimMode = false;
+        let simMinutes = 0;
 
-        let drivers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || Array.from({ length: DRIVER_COUNT }, (_, i) => ({
+        // 初期データ（5名分）
+        let drivers = JSON.parse(localStorage.getItem(STORAGE_KEY)) || Array.from({ length: 5 }, (_, i) => ({
             name: `Driver ${i + 1}`, total: 100, done: 0, absent: 0, start: "08:00", end: "20:00"
         }));
 
-        function calculate(d) {
+        // 表示用時刻の取得
+        function getActiveTime() {
             const now = new Date();
+            if (!isSimMode) return now;
+            now.setHours(Math.floor(simMinutes / 60), simMinutes % 60, 0, 0);
+            return now;
+        }
+
+        function calculate(d, activeTime) {
             const parse = (t) => {
                 const [h, m] = t.split(':').map(Number);
-                const dt = new Date(); dt.setHours(h, m, 0, 0); return dt;
+                const dt = new Date(activeTime); dt.setHours(h, m, 0, 0); return dt;
             };
             
             const start = parse(d.start);
             const end = parse(d.end);
-            const elapsed = Math.max(1, (now - start) / (1000 * 60 * 60)); // 経過時間(h)
-            const remaining = Math.max(0.1, (end - now) / (1000 * 60 * 60)); // 残り時間(h)
+            const elapsed = Math.max(0.1, (activeTime - start) / (1000 * 60 * 60)); 
+            const remaining = Math.max(0.1, (end - activeTime) / (1000 * 60 * 60)); 
             
-            const currentPace = d.done / elapsed; // 時速
-            const leftItems = Math.max(0, d.total - d.done - d.absent); // 残り個数
-            const reqPace = leftItems / remaining; // 必要な時速
+            const currentPace = d.done / elapsed; 
+            const leftItems = Math.max(0, d.total - d.done - d.absent); 
+            const reqPace = leftItems / remaining; 
             
-            const risk = d.done > 0 ? Math.min(150, Math.floor((reqPace / currentPace) * 100)) : 0;
+            const risk = d.done > 0 ? Math.min(200, Math.floor((reqPace / currentPace) * 100)) : 0;
             const predict = Math.max(0, Math.ceil(leftItems - (currentPace * remaining)));
 
             return { risk, predict, pace: currentPace.toFixed(1) };
         }
 
         function render() {
+            const activeTime = getActiveTime();
+            document.getElementById('display-time').innerText = activeTime.getHours().toString().padStart(2, '0') + ':' + activeTime.getMinutes().toString().padStart(2, '0');
+            
             const container = document.getElementById('grid');
             container.innerHTML = '';
             
             drivers.forEach((d, i) => {
-                const stats = calculate(d);
+                const stats = calculate(d, activeTime);
                 const isAlert = stats.risk >= 100 && stats.predict > 0;
                 
                 const div = document.createElement('div');
                 div.className = `card ${isAlert ? 'alert' : ''}`;
                 div.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
-                        <input class="bg-transparent font-bold outline-none border-b border-gray-700 w-1/2" value="${d.name}" oninput="drivers[${i}].name=this.value;save()">
+                        <input class="bg-transparent font-bold text-white outline-none border-b border-gray-700 w-1/2" value="${d.name}" oninput="drivers[${i}].name=this.value;save()">
                         <div class="text-right">
-                            <span class="label-text">Risk</span>
+                            <span class="label-text">Risk Score</span>
                             <div class="text-2xl font-black ${isAlert ? 'text-red-500' : 'text-green-400'}">${stats.risk}%</div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-                        <div class="bg-black/30 p-2 rounded">
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <div class="bg-black/40 p-3 rounded-lg border border-white/5">
                             <div class="label-text">Pace</div>
-                            <div class="font-bold text-blue-300">${stats.pace}/h</div>
+                            <div class="text-xl font-bold text-blue-300">${stats.pace}<span class="text-[10px] ml-1">/h</span></div>
                         </div>
-                        <div class="bg-black/30 p-2 rounded col-span-2">
+                        <div class="bg-black/40 p-3 rounded-lg border border-white/5">
                             <div class="label-text">未配予測</div>
-                            <div class="font-bold ${stats.predict > 0 ? 'text-red-400' : 'text-green-400'}">${stats.predict > 0 ? 'あと '+stats.predict+' 個' : '完配見込'}</div>
+                            <div class="text-xl font-bold ${stats.predict > 0 ? 'text-red-400' : 'text-green-400'}">${stats.predict > 0 ? stats.predict + '個' : '完配見込'}</div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <div class="label-text text-blue-400">完了数</div>
-                            <input type="number" class="input-box border-blue-900" value="${d.done}" oninput="drivers[${i}].done=Number(this.value);save();updateUI()">
+                            <input type="number" class="input-box" value="${d.done}" oninput="drivers[${i}].done=Number(this.value);save();render()">
                         </div>
                         <div>
                             <div class="label-text text-orange-400">不在数</div>
-                            <input type="number" class="input-box border-orange-900" value="${d.absent}" oninput="drivers[${i}].absent=Number(this.value);save();updateUI()">
+                            <input type="number" class="input-box" value="${d.absent}" oninput="drivers[${i}].absent=Number(this.value);save();render()">
                         </div>
-                        <div>
-                            <div class="label-text text-gray-500">持戻込総数</div>
-                            <input type="number" class="input-box" value="${d.total}" oninput="drivers[${i}].total=Number(this.value);save();updateUI()">
-                        </div>
-                        <div class="grid grid-cols-2 gap-1">
+                        <div class="col-span-2 grid grid-cols-3 gap-2 pt-2 border-t border-gray-800 mt-2">
+                            <div>
+                                <div class="label-text">総数</div>
+                                <input type="number" class="input-box text-sm p-1" value="${d.total}" oninput="drivers[${i}].total=Number(this.value);save();render()">
+                            </div>
                             <div>
                                 <div class="label-text">開始</div>
-                                <input type="text" class="input-box text-[10px] p-1" value="${d.start}" oninput="drivers[${i}].start=this.value;save();updateUI()">
+                                <input type="text" class="input-box text-sm p-1" value="${d.start}" oninput="drivers[${i}].start=this.value;save();render()">
                             </div>
                             <div>
                                 <div class="label-text">終了</div>
-                                <input type="text" class="input-box text-[10px] p-1" value="${d.end}" oninput="drivers[${i}].end=this.value;save();updateUI()">
+                                <input type="text" class="input-box text-sm p-1" value="${d.end}" oninput="drivers[${i}].end=this.value;save();render()">
                             </div>
                         </div>
                     </div>
@@ -115,17 +141,38 @@
         }
 
         function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(drivers)); }
-        function updateUI() { render(); }
-        
-        // 時計と自動更新
-        setInterval(() => {
+
+        // 時刻同期ボタン
+        function resetToNow() {
+            isSimMode = false;
             const now = new Date();
-            document.getElementById('clock').innerText = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('time-slider').value = now.getHours() * 60 + now.getMinutes();
+            document.getElementById('mode-badge').innerText = "Real-time";
+            document.getElementById('mode-badge').className = "text-[9px] font-bold px-2 py-0.5 rounded bg-green-900 text-green-300 inline-block uppercase";
             render();
+        }
+
+        // スライダー操作
+        document.getElementById('time-slider').oninput = function() {
+            isSimMode = true;
+            simMinutes = Number(this.value);
+            document.getElementById('mode-badge').innerText = "Simulation";
+            document.getElementById('mode-badge').className = "text-[9px] font-bold px-2 py-0.5 rounded bg-yellow-900 text-yellow-300 inline-block uppercase";
+            render();
+        };
+
+        // 自動更新 (リアルタイム時のみ)
+        setInterval(() => {
+            if (!isSimMode) {
+                const now = new Date();
+                document.getElementById('time-slider').value = now.getHours() * 60 + now.getMinutes();
+                render();
+            }
         }, 1000 * 30);
 
-        // 初回実行
-        document.getElementById('clock').innerText = new Date().getHours().toString().padStart(2, '0') + ':' + new Date().getMinutes().toString().padStart(2, '0');
+        // 初期起動
+        const initNow = new Date();
+        document.getElementById('time-slider').value = initNow.getHours() * 60 + initNow.getMinutes();
         render();
     </script>
 </body>
