@@ -3,24 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FLEET MONITOR | Professional Edition</title>
+    <title>FLEET MONITOR | Amazon DP Special</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0a0c10; color: #e6edf3; font-family: -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
         .card { background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 16px; position: relative; }
         .card.alert-active { border: 2px solid #f85149; background: #211515; box-shadow: 0 0 20px rgba(248, 81, 73, 0.15); }
-        /* スクロール入力用のスタイル調整 */
-        .input-box { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px; text-align: center; color: white; width: 100%; font-weight: bold; font-size: 16px; outline: none; appearance: none; }
-        .time-select { color-scheme: dark; font-size: 14px; padding: 6px; }
-        .label-text { font-size: 10px; color: #8b949e; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; display: block; }
+        
+        /* スクロール選択（select）のカスタマイズ */
+        .scroll-select { 
+            background: #0d1117; 
+            border: 1px solid #30363d; 
+            border-radius: 8px; 
+            padding: 10px 5px; 
+            text-align: center; 
+            color: white; 
+            width: 100%; 
+            font-weight: bold; 
+            font-size: 16px; 
+            appearance: none; /* デフォルトの矢印を消す */
+            cursor: pointer;
+            outline: none;
+        }
+        .scroll-select:focus { border-color: #58a6ff; }
+        
+        /* 時間入力のカスタマイズ */
+        .time-select { color-scheme: dark; }
+        
+        .label-text { font-size: 10px; color: #8b949e; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; display: block; text-align: center; }
         #auth-overlay { position: fixed; inset: 0; background: #0a0c10; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        
+        /* 選択肢が見やすいように調整 */
+        select option { background: #0d1117; color: white; }
     </style>
 </head>
 <body class="p-4 pb-20">
 
     <div id="auth-overlay">
-        <h2 class="text-xl font-bold mb-2 text-blue-400 italic">FLEET MONITOR AUTH</h2>
-        <input type="password" id="pass-input" class="input-box max-w-xs mb-4" placeholder="Password">
+        <h2 class="text-xl font-bold mb-2 text-blue-400 italic font-black">FLEET MONITOR</h2>
+        <p class="text-[10px] text-gray-600 mb-8 uppercase tracking-widest text-center">Authentication Required for DP Admin</p>
+        <input type="password" id="pass-input" class="scroll-select max-w-xs mb-4" placeholder="Password">
         <button onclick="validateLicense()" class="bg-blue-600 text-white px-10 py-3 rounded-full font-bold active:scale-95 transition-all">認証</button>
     </div>
 
@@ -32,10 +54,10 @@
                     <div id="mode-badge" class="text-[9px] font-bold px-2 py-0.5 rounded bg-green-900 text-green-300 inline-block uppercase">Real-time</div>
                 </div>
                 <div class="text-right">
-                    <div class="label-text">Set Simulation Time</div>
-                    <input type="time" id="sim-time-input" class="bg-[#161b22] text-3xl font-mono font-black text-blue-400 border-none outline-none text-right" oninput="toggleSimMode(this.value)">
+                    <div class="label-text">Time Control</div>
+                    <input type="time" id="sim-time-input" class="bg-transparent text-3xl font-mono font-black text-blue-400 border-none outline-none text-right time-select" oninput="toggleSimMode(this.value)">
                     <br>
-                    <button onclick="resetToNow()" class="mt-2 text-[10px] font-bold bg-blue-600 text-white px-3 py-1 rounded-full active:scale-95 transition-all">↺ 現在時刻に戻す</button>
+                    <button onclick="resetToNow()" class="mt-2 text-[10px] font-bold bg-blue-600 text-white px-3 py-1 rounded-full active:scale-95 transition-all">↺ 現在時刻に同期</button>
                 </div>
             </div>
         </header>
@@ -45,9 +67,18 @@
 
     <script>
         const LICENSE_MASTER = { "amz-dp-trial": "2026-04-02" };
-        const STORAGE_KEY = 'fleet_pro_v1';
+        const STORAGE_KEY = 'fleet_pro_v2';
         let isSimMode = false;
         let drivers = [];
+
+        // 数値選択肢の生成（0〜300）
+        function generateOptions(selected) {
+            let options = "";
+            for (let i = 0; i <= 300; i++) {
+                options += `<option value="${i}" ${i === selected ? 'selected' : ''}>${i}</option>`;
+            }
+            return options;
+        }
 
         function validateLicense() {
             const input = document.getElementById('pass-input').value;
@@ -82,7 +113,7 @@
                 div.className = `card`;
                 div.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
-                        <input class="bg-transparent font-bold text-white border-b border-gray-700 w-1/2" value="${d.name}" oninput="updateField(${i}, 'name', this.value)">
+                        <input class="bg-transparent font-bold text-white border-b border-gray-700 w-1/2 outline-none" value="${d.name}" oninput="updateField(${i}, 'name', this.value)">
                         <div class="text-right">
                             <span class="label-text">Risk Score</span>
                             <div id="risk-${i}" class="text-2xl font-black">0%</div>
@@ -95,16 +126,37 @@
                         </div>
                         <div class="bg-black/40 p-3 rounded-lg border border-white/5">
                             <span class="label-text">未配予測</span>
-                            <div id="pred-${i}" class="text-xl font-bold">完配見込</div>
+                            <div id="pred-${i}" class="text-xl font-bold text-green-400">完配見込</div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
-                        <div><span class="label-text text-blue-400">完了数</span><input type="number" class="input-box" value="${d.done}" oninput="updateField(${i}, 'done', Number(this.value))"></div>
-                        <div><span class="label-text text-orange-400">不在数</span><input type="number" class="input-box" value="${d.absent}" oninput="updateField(${i}, 'absent', Number(this.value))"></div>
+                        <div>
+                            <span class="label-text text-blue-400">完了数</span>
+                            <select class="scroll-select" onchange="updateField(${i}, 'done', Number(this.value))">
+                                ${generateOptions(d.done)}
+                            </select>
+                        </div>
+                        <div>
+                            <span class="label-text text-orange-400">不在数</span>
+                            <select class="scroll-select" onchange="updateField(${i}, 'absent', Number(this.value))">
+                                ${generateOptions(d.absent)}
+                            </select>
+                        </div>
                         <div class="col-span-2 grid grid-cols-3 gap-2 pt-2 border-t border-gray-800 mt-2">
-                            <div><span class="label-text">総数</span><input type="number" class="input-box text-sm" value="${d.total}" oninput="updateField(${i}, 'total', Number(this.value))"></div>
-                            <div><span class="label-text">開始</span><input type="time" class="input-box time-select" value="${d.start}" oninput="updateField(${i}, 'start', this.value)"></div>
-                            <div><span class="label-text">終了</span><input type="time" class="input-box time-select" value="${d.end}" oninput="updateField(${i}, 'end', this.value)"></div>
+                            <div>
+                                <span class="label-text">持ち出し個数</span>
+                                <select class="scroll-select text-sm" onchange="updateField(${i}, 'total', Number(this.value))">
+                                    ${generateOptions(d.total)}
+                                </select>
+                            </div>
+                            <div>
+                                <span class="label-text">開始</span>
+                                <input type="time" class="scroll-select text-sm time-select" value="${d.start}" oninput="updateField(${i}, 'start', this.value)">
+                            </div>
+                            <div>
+                                <span class="label-text">終了</span>
+                                <input type="time" class="scroll-select text-sm time-select" value="${d.end}" oninput="updateField(${i}, 'end', this.value)">
+                            </div>
                         </div>
                     </div>
                 `;
@@ -124,7 +176,6 @@
             const currentPace = d.done / elapsed; 
             const leftItems = Math.max(0, d.total - d.done - d.absent); 
             const reqPace = leftItems / remaining; 
-            // Risk Scoreの上限を100%に制限
             const risk = d.done > 0 ? Math.min(100, Math.floor((reqPace / Math.max(0.1, currentPace)) * 100)) : 0;
             const predict = Math.max(0, Math.ceil(leftItems - (currentPace * remaining)));
             return { risk, predict, pace: currentPace.toFixed(1) };
@@ -133,7 +184,7 @@
         function updateCalculations() {
             const timeVal = document.getElementById('sim-time-input').value;
             const activeTime = new Date();
-            if (isSimMode) {
+            if (isSimMode && timeVal) {
                 const [h, m] = timeVal.split(':').map(Number);
                 activeTime.setHours(h, m, 0, 0);
             }
@@ -142,12 +193,17 @@
                 const stats = calculate(d, activeTime);
                 const card = document.getElementById(`card-${i}`);
                 if (!card) return;
-                document.getElementById(`risk-${i}`).innerText = `${stats.risk}%`;
-                document.getElementById(`risk-${i}`).className = `text-2xl font-black ${stats.risk >= 90 ? 'text-red-500' : 'text-green-400'}`;
+                
+                const riskEl = document.getElementById(`risk-${i}`);
+                riskEl.innerText = `${stats.risk}%`;
+                riskEl.className = `text-2xl font-black ${stats.risk >= 90 ? 'text-red-500' : 'text-green-400'}`;
+                
                 document.getElementById(`pace-${i}`).innerText = stats.pace;
+                
                 const predEl = document.getElementById(`pred-${i}`);
                 predEl.innerText = stats.predict > 0 ? `${stats.predict}個` : '完配見込';
                 predEl.className = `text-xl font-bold ${stats.predict > 0 ? 'text-red-400' : 'text-green-400'}`;
+                
                 if (stats.risk >= 90 && stats.predict > 0) card.classList.add('alert-active'); else card.classList.remove('alert-active');
             });
         }
